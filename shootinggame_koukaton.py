@@ -27,6 +27,7 @@ class Gravity(pg.sprite.Sprite):
         if self.life < 0:
             self.kill()
 
+
 def check_bound(obj_rct: pg.Rect) -> tuple[bool, bool]:
     """
     オブジェクトが画面内or画面外を判定し，真理値タプルを返す関数
@@ -73,24 +74,6 @@ class Bird(pg.sprite.Sprite):
         super().__init__()
         img0 = pg.transform.rotozoom(pg.image.load(f"fig/{num}.png"), 0, 0.9)
         img = pg.transform.flip(img0, True, False)  # デフォルトのこうかとん
-        # self.imgs = {
-        #     (+1, 0): img,  # 右
-        #     (+1, -1): pg.transform.rotozoom(img, 45, 0.9),  # 右上
-        #     (0, -1): pg.transform.rotozoom(img, 90, 0.9),  # 上
-        #     (-1, -1): pg.transform.rotozoom(img0, -45, 0.9),  # 左上
-        #     (+1, -1): pg.transform.rotozoom(img, 45, 0.9),  # 右上
-        #     (0, -1): pg.transform.rotozoom(img, 90, 0.9),  # 上
-        #     (-1, -1): pg.transform.rotozoom(img0, -45, 0.9),  # 左上
-        #     (-1, 0): img0,  # 左
-        #     (-1, +1): pg.transform.rotozoom(img0, 45, 0.9),  # 左下
-        #     (0, +1): pg.transform.rotozoom(img, -90, 0.9),  # 下
-        #     (+1, +1): pg.transform.rotozoom(img, -45, 0.9),  # 右下
-        #     (-1, +1): pg.transform.rotozoom(img0, 45, 0.9),  # 左下
-        #     (0, +1): pg.transform.rotozoom(img, -90, 0.9),  # 下
-        #     (+1, +1): pg.transform.rotozoom(img, -45, 0.9),  # 右下
-        # }
-        # self.dire = (+1, 0)
-        # self.image = self.imgs[self.dire]
         self.image = img
         self.rect = self.image.get_rect()
         self.rect.center = xy
@@ -123,7 +106,6 @@ class Bird(pg.sprite.Sprite):
             self.rect.move_ip(-self.speed*sum_mv[0], -self.speed*sum_mv[1])
         if not (sum_mv[0] == 0 and sum_mv[1] == 0):
             self.dire = tuple(sum_mv)
-            # self.image = self.imgs[self.dire]
         if self.state == "hyper":
             self.image = pg.transform.laplacian(self.image)
         screen.blit(self.image, self.rect)
@@ -238,22 +220,21 @@ class Enemy(pg.sprite.Sprite):
         super().__init__()
         self.image = random.choice(__class__.imgs)
         self.rect = self.image.get_rect()
-        self.rect.center = random.randint(0, WIDTH), 0
-        self.vx, self.vy = 0, +6
-        self.bound = random.randint(50, HEIGHT//2)  # 停止位置
-        self.state = "down"  # 降下状態or停止状態
+        self.rect.center = WIDTH+50, random.randint(0, HEIGHT)  # 初期位置を右端に設定
+        self.vx, self.vy = -6, 0  # 左方向に移動
+        self.bound = random.randint(WIDTH // 2, WIDTH - 50)  # 停止位置
+        self.state = "left"  # 左移動状態or停止状態
         self.interval = random.randint(50, 300)  # 爆弾投下インターバル
 
     def update(self):
         """
-        敵機を速度ベクトルself.vyに基づき移動（降下）させる
-        ランダムに決めた停止位置_boundまで降下したら，_stateを停止状態に変更する
+        敵機を速度ベクトルself.vx, self.vyに基づき移動（左移動）させる
+        ランダムに決めた停止位置_boundまで移動したら，_stateを停止状態に変更する
         引数 screen：画面Surface
         """
-        if self.rect.centery > self.bound:
-            self.vy = 0
-            self.state = "stop"
-        self.rect.move_ip(self.vx, self.vy)
+        if self.rect.centerx < self.bound:
+            self.vx = 0
+            self.state = "stop"  # 停止状態に変更
         self.rect.move_ip(self.vx, self.vy)
 
 
@@ -288,26 +269,21 @@ class Shield(pg.sprite.Sprite):
         """
         super().__init__()
         # 空のSurfaceを作成
-        self.image = pg.Surface((20,bird.rect.height * 2))
-        
+        self.image = pg.Surface((20,bird.rect.height * 2))     
         # 矩形を描画
         pg.draw.rect(self.image, (0, 0, 255), (0, 0, 20, bird.rect.height * 2))
         self.rect = self.image.get_rect()
-
         # こうかとんの向きと位置を基に固定する
         vx, vy = bird.dire  # こうかとんの方向ベクトル
         angle = math.degrees(math.atan2(-vy, vx))  # 角度を計算
-        
         # 画像を回転
         self.image = pg.transform.rotozoom(self.image, angle, 1.0)
         self.image.set_colorkey((0,0,0))
         self.rect = self.image.get_rect()
-
         # 防御壁をこうかとんから1体分ずらした位置に配置
         offset_x = vx * bird.rect.width
         offset_y = vy * bird.rect.height
         self.rect.center = (bird.rect.centerx + offset_x, bird.rect.centery + offset_y)
-
         # 防御壁の寿命
         self.life = life
     
@@ -353,9 +329,40 @@ class EMP(pg.sprite.Sprite):
         if self.life < 0:
             self.kill()
 
+    
+class Obstacle(pg.sprite.Sprite):
+    """
+    障害物に関するクラス
+    """
+    def __init__(self):
+        super().__init__()
+        self.image = pg.image.load("fig/toge.png")  # toge.pngを読み込む
+        self.image = pg.transform.scale(self.image, (50, 50))  # 画像をリサイズする
+        self.rect = self.image.get_rect()
+        self.rect.centerx = WIDTH + 50  # 初期位置を右端に設定
+        self.vx = -6  # 左方向に移動
+
+    def update(self):
+        self.rect.move_ip(self.vx, 0)
+        if self.rect.right < 0:
+            self.kill()
+
+def create_obstacle_wall():
+    """
+    障害物を縦に連ねて壁のようにする関数
+    """
+    wall = pg.sprite.Group()
+    gap_start = random.randint(0, HEIGHT - 150)  # ランダムに隙間の開始位置を決定
+    for i in range(0, HEIGHT, 50):  # 50ピクセル間隔で縦に連ねる
+        if not (gap_start <= i < gap_start + 150):  # 5つ分の隙間を作成
+            obstacle = Obstacle()
+            obstacle.rect.centery = i
+            wall.add(obstacle)
+    return wall
+
 
 def main():
-    pg.display.set_caption("真！こうかとん無双")
+    pg.display.set_caption("シューティングこうかとん")
     screen = pg.display.set_mode((WIDTH, HEIGHT))
     bg_img = pg.image.load(f"fig/pg_bg.jpg")
     flip_bg_img = pg.transform.flip(bg_img, True, False)
@@ -368,9 +375,10 @@ def main():
     emys = pg.sprite.Group()
     shields = pg.sprite.Group()  # 防御壁グループを追加
     emps = pg.sprite.Group()  # EMPのグループ
+    obstacles = pg.sprite.Group()  # 障害物グループを追加
 
     tmr = 0
-    emps.update()# EMPの更新と描画を追加
+    emps.update()  # EMPの更新と描画を追加
     emps.draw(screen)
       
     clock = pg.time.Clock()
@@ -399,14 +407,18 @@ def main():
                 score.value -= 100
                 bird.state = "hyper"
                 bird.hyper_life = 500
-        X = tmr%3200
-        screen.blit(bg_img, [-X*3, 0])
-        screen.blit(flip_bg_img, [-X*3+1600, 0])
-        screen.blit(bg_img, [-X*3+3200, 0])
-        screen.blit(flip_bg_img, [-X*3+4800, 0])
+
+        X = tmr % 3200
+        screen.blit(bg_img, [-X * 3, 0])
+        screen.blit(flip_bg_img, [-X * 3 + 1600, 0])
+        screen.blit(bg_img, [-X * 3 + 3200, 0])
+        screen.blit(flip_bg_img, [-X * 3 + 4800, 0])
 
         if tmr%200 == 0:  # 200フレームに1回，敵機を出現させる
             emys.add(Enemy())
+
+        if tmr % 225 == 0:  # 障害物を生成
+            obstacles.add(create_obstacle_wall())
 
         for emy in emys:
             if emy.state == "stop" and tmr%emy.interval == 0:
@@ -445,7 +457,23 @@ def main():
                 pg.display.update()
                 time.sleep(2)
                 return
+        
+        # 障害物との衝突判定を追加
+        for obstacle in pg.sprite.spritecollide(bird, obstacles, True):
+            if bird.state == "hyper":
+                exps.add(Explosion(obstacle, 50))
+                score.value += 1  # 1点アップ
+                continue
+            else:
+                bird.change_img(8, screen) # こうかとん悲しみエフェクト
+                score.update(screen)
+                pg.display.update()
+                time.sleep(2)
+                return
 
+
+        obstacles.update()
+        obstacles.draw(screen)
         gravity_group.update()
         gravity_group.draw(screen)
         bird.update(key_lst, screen)
