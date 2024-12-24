@@ -508,7 +508,7 @@ def main():
 
         for bomb in pg.sprite.groupcollide(bombs, shields, True, False).keys():
             exps.add(Explosion(bomb, 50))  # 爆発エフェクト
-            score.value += 1  # 1点アップ
+        score.value += 1  # 1点アップ
 
         # 重力場と爆弾、敵機の衝突判定
         for gravity in gravity_group:
