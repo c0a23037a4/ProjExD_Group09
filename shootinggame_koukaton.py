@@ -266,7 +266,7 @@ class Score:
     def __init__(self):
         self.font = pg.font.Font(None, 50)
         self.color = (0, 0, 255)
-        self.value = 10000
+        self.value = 0
         self.image = self.font.render(f"Score: {self.value}", 0, self.color)
         self.rect = self.image.get_rect()
         self.rect.center = 100, HEIGHT-50
@@ -297,16 +297,19 @@ class Shield(pg.sprite.Sprite):
         # こうかとんの向きと位置を基に固定する
         vx, vy = bird.dire  # こうかとんの方向ベクトル
         angle = math.degrees(math.atan2(-vy, vx))  # 角度を計算
-        
+        self.rect.center = (
+            bird.rect.right + 30,  # こうかとんの右端から少し離れた位置
+            bird.rect.centery      # こうかとんの中央と同じ高さ
+        )
         # 画像を回転
-        self.image = pg.transform.rotozoom(self.image, angle, 1.0)
-        self.image.set_colorkey((0,0,0))
-        self.rect = self.image.get_rect()
+        # self.image = pg.transform.rotozoom(self.image, angle, 1.0)
+        # self.image.set_colorkey((0,0,0))
+        # self.rect = self.image.get_rect()
 
         # 防御壁をこうかとんから1体分ずらした位置に配置
-        offset_x = vx * bird.rect.width
-        offset_y = vy * bird.rect.height
-        self.rect.center = (bird.rect.centerx + offset_x, bird.rect.centery + offset_y)
+        # offset_x = vx * bird.rect.width
+        # offset_y = vy * bird.rect.height
+        # self.rect.center = (bird.rect.centerx + offset_x, bird.rect.centery + offset_y)
 
         # 防御壁の寿命
         self.life = life
@@ -353,6 +356,151 @@ class EMP(pg.sprite.Sprite):
         if self.life < 0:
             self.kill()
 
+class GuidedBeam(pg.sprite.Sprite):
+    """
+    誘導ビームに関するクラス
+    """
+    def __init__(self, bird: Bird, emys: pg.sprite.Group):
+        """
+        誘導ビーム画像Surfaceを生成する
+        引数1 bird：ビームを放つこうかとん
+        引数2 emys：敵機のグループ
+        """
+        super().__init__()
+        self.vx, self.vy = 1, 0
+        self.image = pg.transform.rotozoom(pg.image.load(f"fig/beam.png"), 0, 0.9)
+        self.rect = self.image.get_rect()
+        self.rect.centery = bird.rect.centery
+        self.rect.centerx = bird.rect.centerx + bird.rect.width
+        self.speed = 10
+        
+        # 最も近い敵を特定
+        nearest_emy = None
+        min_dist = float('inf')
+        for emy in emys:
+            dx = emy.rect.centerx - self.rect.centerx
+            dy = emy.rect.centery - self.rect.centery
+            dist = (dx ** 2 + dy ** 2) ** 0.5
+            if dist < min_dist:
+                min_dist = dist
+                nearest_emy = emy
+        
+        # 誘導対象となる敵がいる場合、その方向をターゲットとする
+        if nearest_emy:
+            dx = nearest_emy.rect.centerx - self.rect.centerx
+            dy = nearest_emy.rect.centery - self.rect.centery
+            norm = math.sqrt(dx**2 + dy**2)
+            self.vx = dx/norm if norm > 0 else 1
+            self.vy = dy/norm if norm > 0 else 0
+            angle = math.degrees(math.atan2(-self.vy, self.vx))
+            self.image = pg.transform.rotozoom(pg.image.load(f"fig/beam.png"), angle, 0.9)
+
+    def update(self):
+        """
+        誘導ビームを速度ベクトルself.vx, self.vyに基づき移動させる
+        """
+        self.rect.move_ip(self.speed*self.vx, self.speed*self.vy)
+        if check_bound(self.rect) != (True, True):
+            self.kill()
+
+class Item(pg.sprite.Sprite):
+    """
+    アイテムに関するクラス
+    """
+    def __init__(self, x: int, y: int, type: str):
+        """
+        アイテムSurfaceを生成する
+        引数1 x：アイテムのx座標
+        引数2 y：アイテムのy座標
+        引数3 type：アイテムの種類（"gravity", "shield", "emp", "hyper"）
+        """
+        super().__init__()
+        self.type = type
+        self.image = pg.Surface((30, 30))
+        
+        # アイテムの種類に応じて色を設定
+        colors = {
+            "gravity": (255, 0, 0),      # 赤
+            "shield": (0, 0, 255),       # 青
+            "emp": (255, 165, 0),        # オレンジ
+            "hyper": (0, 255, 0),         # 緑
+            "guided": (255, 0, 255)      # 紫（誘導ビーム用）
+        }
+        
+        # 円形のアイテムを描画
+        pg.draw.rect(self.image, colors[type], (5, 5, 20, 20))
+        self.image.set_colorkey((0, 0, 0))
+        self.rect = self.image.get_rect()
+        self.rect.center = WIDTH + 15, y
+        self.vx = -5  # 左方向への速度
+
+    def update(self):
+        """
+        アイテムを落下させる
+        """
+        self.rect.centerx += self.vx
+        if self.rect.right < 0:  # 左端から出たら消える
+            self.kill()
+
+class ItemStock:
+    """
+    アイテムの所持数を管理するクラス
+    """
+    def __init__(self):
+        self.items = {
+            "gravity": 0,  # 重力場の所持数
+            "shield": 0,   # 防御壁の所持数
+            "emp": 0,      # EMPの所持数
+            "hyper": 0,     # 無敵モードの所持数
+            "guided": 0    # 誘導ビームの所持数
+        }
+        # フォントの設定
+        self.font = pg.font.Font(None, 30)
+        
+    def add_item(self, item_type: str):
+        """
+        アイテムを追加する
+        """
+        self.items[item_type] += 1
+        
+    def use_item(self, item_type: str) -> bool:
+        """
+        アイテムを使用する
+        戻り値：使用可能な場合True、使用できない場合False
+        """
+        if self.items[item_type] > 0:
+            self.items[item_type] -= 1
+            return True
+        return False
+    
+    def draw(self, screen: pg.Surface):
+        """
+        アイテムの所持数を画面に表示
+        """
+        colors = {
+            "gravity": (255, 0, 0),      # 赤
+            "shield": (0, 0, 255),       # 青
+            "emp": (255, 165, 0),        # オレンジ
+            "hyper": (0, 255, 0),         # 緑
+            "guided": (255, 0, 255)      # 紫（誘導ビーム用）
+        }
+        keys = {
+            "gravity": "Enter",
+            "shield": "S",
+            "emp": "E",
+            "hyper": "RShift",
+            "guided": "LShift"  # 左シフトキーで誘導ビーム
+        }
+        for i, (item_type, count) in enumerate(self.items.items()):
+            # アイテムアイコンの表示
+            icon = pg.Surface((20, 20))
+            pg.draw.rect(icon, colors[item_type], (5, 5, 20, 20))
+            icon.set_colorkey((0, 0, 0))
+            screen.blit(icon, (10, 10 + i * 30))
+            
+            # 所持数の表示
+            text = self.font.render(f"x{count} ({keys[item_type]}", True, (255, 255, 255))
+            screen.blit(text, (35, 10 + i * 30))
 
 def main():
     pg.display.set_caption("真！こうかとん無双")
@@ -360,6 +508,7 @@ def main():
     bg_img = pg.image.load(f"fig/pg_bg.jpg")
     flip_bg_img = pg.transform.flip(bg_img, True, False)
     score = Score()
+    item_stock = ItemStock()  # アイテム所持管理クラスのインスタンス化
 
     bird = Bird(3, (900, 400))
     bombs = pg.sprite.Group()
@@ -368,6 +517,8 @@ def main():
     emys = pg.sprite.Group()
     shields = pg.sprite.Group()  # 防御壁グループを追加
     emps = pg.sprite.Group()  # EMPのグループ
+    items = pg.sprite.Group()  # アイテムグループを追加
+    gravity_group = pg.sprite.Group()
 
     tmr = 0
     emps.update()# EMPの更新と描画を追加
@@ -381,29 +532,63 @@ def main():
         for event in pg.event.get():
             if event.type == pg.QUIT:
                 return 0
-            if event.type == pg.KEYDOWN:  # 必ず KEYDOWN のチェックを行う
+            if event.type == pg.KEYDOWN:
                 if event.key == pg.K_SPACE:
                     beams.add(Beam(bird))
-                if event.key == pg.K_s and score.value >= 50 and len(shields) == 0:
-                    score.value -= 50  # スコアを消費
-                    shields.add(Shield(bird, 400))  # 防御壁を生成
-            if event.type == pg.KEYDOWN and event.key == pg.K_RETURN and score.value >= 200:
-                    # リターンキー押下で重力場を発動
-                    gravity_group.add(Gravity(400))
-                    score.value -= 200  # スコアを200減らす
-            if event.type == pg.KEYDOWN and event.key == pg.K_e and score.value >= 20:
-                score.value -= 20  # スコアを消費
-                emps.add(EMP(bird, bombs, emys))  # EMPを発動 
+                # アイテム使用の判定（スコア条件を削除）
+                elif event.key == pg.K_RETURN:  # 重力場
+                    if item_stock.use_item("gravity"):
+                        gravity_group.add(Gravity(400))
+                elif event.key == pg.K_s:  # 防御壁
+                    if item_stock.use_item("shield"):
+                        shields.add(Shield(bird, 400))
+                elif event.key == pg.K_e:  # EMP
+                    if item_stock.use_item("emp"):
+                        emps.add(EMP(bird, bombs, emys))
+                elif event.key == pg.K_RSHIFT:  # 無敵モード
+                    if item_stock.use_item("hyper"):
+                        bird.state = "hyper"
+                        bird.hyper_life = 500
+                elif event.key == pg.K_LSHIFT:  # 誘導ビーム
+                    if item_stock.use_item("guided"):
+                        beams.add(GuidedBeam(bird, emys))
+        # for event in pg.event.get():
+        #     if event.type == pg.QUIT:
+        #         return 0
+        #     if event.type == pg.KEYDOWN:  # 必ず KEYDOWN のチェックを行う
+        #         if event.key == pg.K_SPACE:
+        #             beams.add(Beam(bird))
+        #         if event.key == pg.K_s and score.value >= 50 and len(shields) == 0:
+        #             score.value -= 50  # スコアを消費
+        #             shields.add(Shield(bird, 400))  # 防御壁を生成
+        #     if event.type == pg.KEYDOWN and event.key == pg.K_RETURN and score.value >= 200:
+        #             # リターンキー押下で重力場を発動
+        #             gravity_group.add(Gravity(400))
+        #             score.value -= 200  # スコアを200減らす
+        #     if event.type == pg.KEYDOWN and event.key == pg.K_e and score.value >= 20:
+        #         score.value -= 20  # スコアを消費
+        #         emps.add(EMP(bird, bombs, emys))  # EMPを発動 
 
-            if key_lst[pg.K_RSHIFT] and score.value >= 100:
-                score.value -= 100
-                bird.state = "hyper"
-                bird.hyper_life = 500
+        #     if key_lst[pg.K_RSHIFT] and score.value >= 100:
+        #         score.value -= 100
+        #         bird.state = "hyper"
+        #         bird.hyper_life = 500
+        
+        # アイテムとの衝突判定
+        for item in pg.sprite.spritecollide(bird, items, True):
+            item_stock.add_item(item.type)  # アイテムをストックに追加
+
         X = tmr%3200
         screen.blit(bg_img, [-X*3, 0])
         screen.blit(flip_bg_img, [-X*3+1600, 0])
         screen.blit(bg_img, [-X*3+3200, 0])
         screen.blit(flip_bg_img, [-X*3+4800, 0])
+
+        # ランダムなタイミングでアイテムを出現させる
+        if tmr % 300 == 0:  # 300フレームごとに
+            item_type = random.choice(["gravity", "shield", "emp", "hyper", "guided"])
+            y = random.randint(0, HEIGHT)  # y座標をランダムに設定
+            items.add(Item(WIDTH + 15, y, item_type))
 
         if tmr%200 == 0:  # 200フレームに1回，敵機を出現させる
             emys.add(Enemy())
@@ -445,6 +630,21 @@ def main():
                 pg.display.update()
                 time.sleep(2)
                 return
+        # アイテムとの衝突判定
+        for item in pg.sprite.spritecollide(bird, items, True):
+            if item.type == "gravity" and score.value >= 200:
+                gravity_group.add(Gravity(400))
+                score.value -= 200
+            elif item.type == "shield" and score.value >= 50:
+                shields.add(Shield(bird, 400))
+                score.value -= 50
+            elif item.type == "emp" and score.value >= 20:
+                emps.add(EMP(bird, bombs, emys))
+                score.value -= 20
+            elif item.type == "hyper" and score.value >= 100:
+                bird.state = "hyper"
+                bird.hyper_life = 500
+                score.value -= 100
 
         gravity_group.update()
         gravity_group.draw(screen)
@@ -459,7 +659,10 @@ def main():
         exps.draw(screen)
         shields.update()
         shields.draw(screen)
+        items.update()  # アイテムの更新
+        items.draw(screen)  # アイテムの描画
         score.update(screen)
+        item_stock.draw(screen)  # アイテムの所持数を表示
         pg.display.update()
         tmr += 1
         clock.tick(50)
