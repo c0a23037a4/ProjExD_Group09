@@ -5,7 +5,6 @@ import sys
 import time
 import pygame as pg
 
-
 WIDTH = 1100  # ゲームウィンドウの幅
 HEIGHT = 650  # ゲームウィンドウの高さ
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
@@ -57,6 +56,7 @@ class Gravity(pg.sprite.Sprite):
             self.kill()
 
 
+
 def check_bound(obj_rct: pg.Rect) -> tuple[bool, bool]:
     """
     オブジェクトが画面内or画面外を判定し，真理値タプルを返す関数
@@ -70,7 +70,6 @@ def check_bound(obj_rct: pg.Rect) -> tuple[bool, bool]:
         tate = False
     return yoko, tate
 
-
 def calc_orientation(org: pg.Rect, dst: pg.Rect) -> tuple[float, float]:
     """
     orgから見て，dstがどこにあるかを計算し，方向ベクトルをタプルで返す
@@ -82,24 +81,53 @@ def calc_orientation(org: pg.Rect, dst: pg.Rect) -> tuple[float, float]:
     norm = math.sqrt(x_diff**2+y_diff**2)
     return x_diff/norm, y_diff/norm
 
+def draw_charge_indicator(screen, is_charged):
+    """
+    チャージショットの状態を示す四角形を描画する
+    引数:
+        screen: 描画先の画面
+        is_charged: チャージショットが完了しているかのフラグ（True/False）
+    """
+    color = (0, 255, 0) if is_charged else (255, 0, 0)  # 緑: 完了, 赤: 未完了
+    pg.draw.rect(screen, color, (WIDTH - 80, HEIGHT - 80, 50, 50))  # 右下に四角形を描画
+
+
+class ChargeBar:
+    """
+    チャージ量を表示するバーに関するクラス
+    """
+    def __init__(self):
+        self.charge_time = 0  # チャージ時間
+        self.max_charge = 50  # 最大チャージ時間
+        self.bar_width = 300  # チャージバーの幅
+        self.bar_height = 20  # チャージバーの高さ
+        self.bar_pos = (WIDTH - 350, HEIGHT - 50)  # バーの位置
+
+    def update(self, charging: bool, screen: pg.Surface):
+        """
+        チャージ時間の管理と描画
+        引数:
+            charging: チャージ中かどうかのフラグ（True/False）
+            screen: 描画先の画面
+        """
+        if charging:
+            self.charge_time += 1
+            if self.charge_time > self.max_charge:
+                self.charge_time = self.max_charge  # 最大値を超えない
+        else:
+            self.charge_time = 0  # チャージ解除でリセット
+
+        # チャージバーの描画
+        filled_width = (self.charge_time / self.max_charge) * self.bar_width
+        pg.draw.rect(screen, (100, 100, 100), (*self.bar_pos, self.bar_width, self.bar_height))
+        pg.draw.rect(screen, (255, 0, 0), (*self.bar_pos, filled_width, self.bar_height))
+
 
 class Bird(pg.sprite.Sprite):
     """
     ゲームキャラクター（こうかとん）に関するクラス
     """
-    delta = {  # 押下キーと移動量の辞書
-        pg.K_UP: (0, -1),
-        pg.K_DOWN: (0, +1),
-        pg.K_LEFT: (-1, 0),
-        pg.K_RIGHT: (+1, 0),
-    }
-
     def __init__(self, num: int, xy: tuple[int, int]):
-        """
-        こうかとん画像Surfaceを生成する
-        引数1 num：こうかとん画像ファイル名の番号
-        引数2 xy：こうかとん画像の位置座標タプル
-        """
         super().__init__()
         img0 = pg.transform.rotozoom(pg.image.load(f"fig/{num}.png"), 0, 0.9)
         img = pg.transform.flip(img0, True, False)  # デフォルトのこうかとん
@@ -130,17 +158,17 @@ class Bird(pg.sprite.Sprite):
         screen.blit(self.image, self.rect)
 
     def update(self, key_lst: list[bool], screen: pg.Surface):
-        """
-        押下キーに応じてこうかとんを移動させる
-        引数1 key_lst：押下キーの真理値リスト
-        引数2 screen：画面Surface
-        """
         sum_mv = [0, 0]
-        for k, mv in __class__.delta.items():
+        for k, mv in {
+            pg.K_UP: (0, -1),
+            pg.K_DOWN: (0, +1),
+            pg.K_LEFT: (-1, 0),
+            pg.K_RIGHT: (+1, 0),
+        }.items():
             if key_lst[k]:
                 sum_mv[0] += mv[0]
                 sum_mv[1] += mv[1]
-        self.rect.move_ip(self.speed*sum_mv[0], self.speed*sum_mv[1])
+        self.rect.move_ip(self.speed * sum_mv[0], self.speed * sum_mv[1])
         if check_bound(self.rect) != (True, True):
             self.rect.move_ip(-self.speed*sum_mv[0], -self.speed*sum_mv[1])
         if not (sum_mv[0] == 0 and sum_mv[1] == 0):
@@ -148,12 +176,6 @@ class Bird(pg.sprite.Sprite):
         if self.state == "hyper":
             self.image = pg.transform.laplacian(self.image)
         screen.blit(self.image, self.rect)
-
-        if self.state == "hyper":
-            self.hyper_life -= 1
-            if self.hyper_life < 0:
-                self.state = "normal"
-
 
 class Bomb(pg.sprite.Sprite):
     """
@@ -190,36 +212,38 @@ class Bomb(pg.sprite.Sprite):
         if check_bound(self.rect) != (True, True):
             self.kill()
 
-
 class Beam(pg.sprite.Sprite):
     """
-    ビームに関するクラス
+    通常の弾とチャージショットに関するクラス
     """
-    def __init__(self, bird: Bird):
-        """
-        ビーム画像Surfaceを生成する
-        引数 bird：ビームを放つこうかとん
-        """
+    def __init__(self, bird: "Bird", max_charged: bool):
         super().__init__()
-        self.vx, self.vy = 1, 0
-        angle = math.degrees(math.atan2(-self.vy, self.vx))
-        self.image = pg.transform.rotozoom(pg.image.load(f"fig/beam.png"), angle, 0.9)
-        self.vx = math.cos(math.radians(angle))
-        self.vy = -math.sin(math.radians(angle))
-        self.rect = self.image.get_rect()
-        self.rect.centery = bird.rect.centery+bird.rect.height*self.vy
-        self.rect.centerx = bird.rect.centerx+bird.rect.width*self.vx
-        self.speed = 10
+        self.beams = []  # 複数のビームを格納するリスト
+        if max_charged:  # MAXチャージ時は5本のビームを生成
+            for i in range(-2, 3):  # 5本のビームを上下に1pxずつずらす
+                self.img = pg.transform.scale(pg.image.load("fig/BEEM1.png"), (300, 75))
+                self.rect = self.img.get_rect()
+                self.rect.centery = bird.rect.centery + i * 0.01 #ここいじったらビームの重なり方が代わるよ
+                self.rect.left = bird.rect.right
+                self.beams.append({"img": self.img, "rct": self.rect, "vx": 20})
+        else:  # 通常弾
+            self.img = pg.image.load("fig/beam.png")
+            self.rect = self.img.get_rect()
+            self.rect.centery = bird.rect.centery
+            self.rect.left = bird.rect.right
+            self.beams.append({"img": self.img, "rct": self.rect, "vx": 10})
 
-    def update(self):
+    def update(self, screen: pg.Surface):
         """
-        ビームを速度ベクトルself.vx, self.vyに基づき移動させる
-        引数 screen：画面Surface
+        ビームの移動と描画
         """
-        self.rect.move_ip(self.speed*self.vx, self.speed*self.vy)
+        for beam in self.beams:
+            if check_bound(beam["rct"]) == (True, True):
+                beam["rct"].move_ip(beam["vx"], 0)
+                screen.blit(beam["img"], beam["rct"])
+        
         if check_bound(self.rect) != (True, True):
             self.kill()
-
 
 class Explosion(pg.sprite.Sprite):
     """
@@ -302,21 +326,18 @@ class Enemy(pg.sprite.Sprite):
             self.state = "stop"  # 停止状態に変更
         self.rect.move_ip(self.vx, self.vy)
 
-
 class Score:
     """
-    打ち落とした爆弾，敵機の数をスコアとして表示するクラス
-    爆弾：1点
-    敵機：10点
+    スコア表示に関するクラス
     """
     def __init__(self):
         self.font = pg.font.Font(None, 50)
         self.color = (0, 0, 255)
-        self.value = 10000
+        self.value = 0
         self.image = self.font.render(f"Score: {self.value}", 0, self.color)
         self.rect = self.image.get_rect()
         self.rect.center = 100, HEIGHT-50
-
+ 
     def update(self, screen: pg.Surface):
         self.image = self.font.render(f"Score: {self.value}", 0, self.color)
         screen.blit(self.image, self.rect)
@@ -504,7 +525,7 @@ def create_obstacle_wall():
 def main():
     pg.display.set_caption("シューティングこうかとん")
     screen = pg.display.set_mode((WIDTH, HEIGHT))
-    bg_img = pg.image.load(f"fig/pg_bg.jpg")
+    bg_img = pg.image.load("fig/pg_bg.jpg")
     flip_bg_img = pg.transform.flip(bg_img, True, False)
     score = Score()
     cpoint = Clear_item().cpoint
@@ -512,9 +533,14 @@ def main():
     jewel_num = Jewel_num()
 
     bird = Bird(3, (900, 400))
-    bombs = pg.sprite.Group()
+    charge_bar = ChargeBar()  # チャージバーのインスタンス
     beams = pg.sprite.Group()
+    clock = pg.time.Clock()
     exps = pg.sprite.Group()
+    tmr = 0
+    charging = False
+
+    bombs = pg.sprite.Group()
     emys = pg.sprite.Group()
     shields = pg.sprite.Group()  # 防御壁グループを追加
     emps = pg.sprite.Group()  # EMPのグループ
@@ -535,8 +561,8 @@ def main():
             if event.type == pg.QUIT:
                 return 0
             if event.type == pg.KEYDOWN:  # 必ず KEYDOWN のチェックを行う
-                if event.key == pg.K_SPACE:
-                    beams.add(Beam(bird))
+                # if event.key == pg.K_SPACE:
+                #     beams.add(Beam(bird))
                 if event.key == pg.K_s and score.value >= 50 and len(shields) == 0:
                     score.value -= 50  # スコアを消費
                     shields.add(Shield(bird, 400))  # 防御壁を生成
@@ -547,6 +573,13 @@ def main():
             if event.type == pg.KEYDOWN and event.key == pg.K_e and score.value >= 20:
                 score.value -= 20  # スコアを消費
                 emps.add(EMP(bird, bombs, emys))  # EMPを発動 
+
+            if event.type == pg.KEYDOWN and event.key == pg.K_SPACE:
+                charging = True
+            if event.type == pg.KEYUP and event.key == pg.K_SPACE:
+                charging = False
+                max_charged = charge_bar.charge_time == charge_bar.max_charge #チャージ時間が足りるならBEEM1を発射する
+                beams.add(Beam(bird, max_charged))
 
             if key_lst[pg.K_RSHIFT] and score.value >= 100:
                 score.value -= 100
@@ -572,6 +605,13 @@ def main():
                 # 敵機が停止状態に入ったら，intervalに応じて爆弾投下
                 bombs.add(Bomb(emy, bird))
 
+        draw_charge_indicator(screen, charge_bar.charge_time == charge_bar.max_charge)
+        charge_bar.update(charging, screen)
+        bird.update(key_lst, screen)
+        # beams = [beam for beam in beams if beam.beams[0]["rct"].right > 0]
+        for beam in beams:
+            beam.update(screen)
+        
         for emy in pg.sprite.groupcollide(emys, beams, True, True).keys():
             exps.add(Explosion(emy, 100))  # 爆発エフェクト
             score.value += 10  # 10点アップ# こうかとん喜びエフェクト
@@ -647,8 +687,8 @@ def main():
         gravity_group.update()
         gravity_group.draw(screen)
         bird.update(key_lst, screen)
-        beams.update()
-        beams.draw(screen)
+        beams.update(screen)
+        # beams.draw(screen)
         emys.update()
         emys.draw(screen)
         bombs.update()
