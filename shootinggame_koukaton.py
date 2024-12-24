@@ -122,7 +122,7 @@ class Beam:
             for i in range(-2, 3):  # 5本のビームを上下に1pxずつずらす
                 beam_img = pg.transform.scale(pg.image.load("fig/BEEM1.png"), (300, 75))
                 beam_rct = beam_img.get_rect()
-                beam_rct.centery = bird.rect.centery + i * 0.01
+                beam_rct.centery = bird.rect.centery + i * 0.01 #ここいじったらビームの重なり方が代わるよ
                 beam_rct.left = bird.rect.right
                 self.beams.append({"img": beam_img, "rct": beam_rct, "vx": 20})
         else:  # 通常弾
@@ -157,17 +157,24 @@ class Score:
 
 
 def main():
-    pg.display.set_caption("たたかえ！こうかとん")
+    pg.display.set_caption("真！こうかとん無双")
     screen = pg.display.set_mode((WIDTH, HEIGHT))
     bg_img = pg.image.load("fig/pg_bg.jpg")
     flip_bg_img = pg.transform.flip(bg_img, True, False)
     score = Score()
-    bird = Bird(3, (300, 200))
+    bird = Bird(3, (900, 400))
     charge_bar = ChargeBar()  # チャージバーのインスタンス
     beams = []
     clock = pg.time.Clock()
     tmr = 0
     charging = False
+
+    bombs = pg.sprite.Group()
+    emys = pg.sprite.Group()
+    shields = pg.sprite.Group()  # 防御壁グループを追加
+
+    clock = pg.time.Clock()
+    gravity_group = pg.sprite.Group()  # Gravityインスタンスを管理するグループ
 
     while True:
         key_lst = pg.key.get_pressed()
@@ -178,7 +185,7 @@ def main():
                 charging = True
             if event.type == pg.KEYUP and event.key == pg.K_SPACE:
                 charging = False
-                max_charged = charge_bar.charge_time == charge_bar.max_charge
+                max_charged = charge_bar.charge_time == charge_bar.max_charge #チャージ時間が足りるならBEEM1を発射する
                 beams.append(Beam(bird, max_charged))
 
         X = tmr % 3200
@@ -193,6 +200,39 @@ def main():
         beams = [beam for beam in beams if beam.beams[0]["rct"].right > 0]
         for beam in beams:
             beam.update(screen)
+        
+        for emy in pg.sprite.groupcollide(emys, beams, True, True).keys():
+            exps.add(Explosion(emy, 100))  # 爆発エフェクト
+            score.value += 10  # 10点アップ# こうかとん喜びエフェクト
+
+        for bomb in pg.sprite.groupcollide(bombs, beams, True, True).keys():
+            exps.add(Explosion(bomb, 50))  # 爆発エフェクト
+            score.value += 1  # 1点アップ
+
+        for bomb in pg.sprite.groupcollide(bombs, shields, True, False).keys():
+            exps.add(Explosion(bomb, 50))  # 爆発エフェクト
+            score.value += 1  # 1点アップ
+
+        # 重力場と爆弾、敵機の衝突判定
+        for gravity in gravity_group:
+            for bomb in pg.sprite.spritecollide(gravity, bombs, True):
+                exps.add(Explosion(bomb, 50))  # 爆発エフェクト
+            for emy in pg.sprite.spritecollide(gravity, emys, True):
+                exps.add(Explosion(emy, 100))  # 爆発エフェクト
+
+        for bomb in pg.sprite.spritecollide(bird, bombs, True):
+            if bomb.state == "inactive":
+                continue
+            if bird.state == "hyper":
+                exps.add(Explosion(bomb, 50))
+                score.value += 1  # 1点アップ
+                continue
+            else:
+                bird.change_img(8, screen) # こうかとん悲しみエフェクト
+                score.update(screen)
+                pg.display.update()
+                time.sleep(2)
+                return
 
         score.update(screen)
         pg.display.update()
