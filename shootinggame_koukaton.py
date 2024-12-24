@@ -11,6 +11,39 @@ HEIGHT = 650  # ゲームウィンドウの高さ
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 
+def gameover(screen: pg.Surface) -> None:
+    """
+    ゲームオーバー画面を表示する関数。
+    引数:
+        screen: ゲームのメイン画面Surface
+    """
+    # 黒い半透明の背景を作成
+    blackout = pg.Surface((WIDTH, HEIGHT))  # 画面サイズに合わせたSurfaceを作成
+    blackout.fill((0, 0, 0))  # 黒で塗りつぶす
+    blackout.set_alpha(128)  # 半透明（128）を設定
+
+    # メッセージを作成
+    font = pg.font.Font(None, 80)  # フォントを設定
+    text = font.render("Game Over", True, (255, 255, 255))  # 白い文字で「Game Over」
+    text_rect = text.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 50))  # 画面中央に配置
+
+    # こうかとんの画像を読み込む
+    kk_cry_img = pg.image.load("fig/100.png")  # 悲しいこうかとんの画像を使用
+    kk_cry_img = pg.transform.rotozoom(kk_cry_img, 0, 0.3)  # サイズ調整
+    kk_left_rect = kk_cry_img.get_rect(center=(WIDTH // 2 , HEIGHT // 2 + 50))
+    #kk_right_rect = kk_cry_img.get_rect(center=(WIDTH // 2 + 150, HEIGHT // 2 + 50))
+
+    # 画面に描画
+    screen.blit(blackout, (0, 0))  # 半透明の黒背景を描画
+    screen.blit(text, text_rect)  # 「Game Over」の文字を描画
+    screen.blit(kk_cry_img, kk_left_rect)  # 左側のこうかとん画像を描画
+    #screen.blit(kk_cry_img, kk_right_rect)  # 右側のこうかとん画像を描画
+
+    # 画面更新と待機
+    pg.display.update()
+    pg.time.wait(5000)  # 5秒間表示
+
+
 class Gravity(pg.sprite.Sprite):
     """
     重力場に関するクラス
@@ -97,6 +130,14 @@ class Bird(pg.sprite.Sprite):
         self.speed = 10
         self.state = "normal"
         self.hyper_life = 500
+        self.hp = Health()
+
+    def take_damage(self, damage):
+        """
+        攻撃を受けた時の処理
+        """
+        if self.state != "hyper":
+            self.hp.take_damage(damage)
 
     def change_img(self, num: int, screen: pg.Surface):
         """
@@ -105,6 +146,8 @@ class Bird(pg.sprite.Sprite):
         引数2 screen：画面Surface
         """
         self.image = pg.transform.rotozoom(pg.image.load(f"fig/3.png"), 0, 0.9)
+        screen.blit(self.image, self.rect)
+        self.image = pg.transform.rotozoom(pg.image.load(f"fig/8.png"), 0, 1.7) #  HPが0になった時の画像
         screen.blit(self.image, self.rect)
 
     def update(self, key_lst: list[bool], screen: pg.Surface):
@@ -353,6 +396,30 @@ class EMP(pg.sprite.Sprite):
         if self.life < 0:
             self.kill()
 
+class Health:
+    """
+    こうかとんのHPを管理するクラス
+    """
+    def __init__(self, max_hp=100):
+        self.max_hp = max_hp
+        self.current_hp = max_hp
+        self.font = pg.font.Font(None, 50)
+        self.color = (255, 0, 0)  # 赤色でHPを表示
+
+    def take_damage(self, damage):
+        """
+        ダメージを受けた際にHPを減少させる
+        """
+        self.current_hp -= damage
+        self.current_hp = max(self.current_hp, 0)  # HP制限
+
+    def update(self, screen: pg.Surface):
+        """
+        画面に現在のHPを表示
+        """
+        hp_text = self.font.render(f"HP: {self.current_hp}/{self.max_hp}", True, self.color)
+        screen.blit(hp_text, (WIDTH - 200, HEIGHT - 50))
+
 
 def main():
     pg.display.set_caption("真！こうかとん無双")
@@ -440,12 +507,16 @@ def main():
                 score.value += 1  # 1点アップ
                 continue
             else:
-                bird.change_img(8, screen) # こうかとん悲しみエフェクト
-                score.update(screen)
-                pg.display.update()
-                time.sleep(2)
-                return
+                bird.take_damage(10)
+                if bird.hp.current_hp <= 0:
+                    bird.change_img(8, screen) # こうかとん悲しみエフェクト
+                    score.update(screen)
+                    gameover(screen)
+                    pg.display.update()
+                    time.sleep(2)
+                    return
 
+        bird.hp.update(screen)
         gravity_group.update()
         gravity_group.draw(screen)
         bird.update(key_lst, screen)
