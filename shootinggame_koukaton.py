@@ -407,36 +407,50 @@ class Item(pg.sprite.Sprite):
     """
     アイテムに関するクラス
     """
+    # 各アイテムタイプに対応する卵画像を設定
+    item_images = {
+        "gravity": "fig/tamago_aka.png",     # 重力場は赤卵
+        "shield": "fig/tamago_ao.png",       # 防御壁は青卵
+        "emp": "fig/tamago_orenge.png",      # EMPはオレンジ卵
+        "hyper": "fig/tamago_midori.png",    # 無敵モードは緑卵
+        "guided": "fig/tamago_mizu.png"      # 誘導ビームは水色卵
+    }
+
     def __init__(self, x: int, y: int, type: str):
         """
         アイテムSurfaceを生成する
         引数1 x：アイテムのx座標
         引数2 y：アイテムのy座標
-        引数3 type：アイテムの種類（"gravity", "shield", "emp", "hyper"）
+        引数3 type：アイテムの種類（"gravity", "shield", "emp", "hyper", "guided"）
         """
         super().__init__()
         self.type = type
-        self.image = pg.Surface((30, 30))
         
-        # アイテムの種類に応じて色を設定
-        colors = {
-            "gravity": (255, 0, 0),      # 赤
-            "shield": (0, 0, 255),       # 青
-            "emp": (255, 165, 0),        # オレンジ
-            "hyper": (0, 255, 0),         # 緑
-            "guided": (255, 0, 255)      # 紫（誘導ビーム用）
-        }
-        
-        # 円形のアイテムを描画
-        pg.draw.rect(self.image, colors[type], (5, 5, 20, 20))
+        # 対応する色の卵画像を読み込んでリサイズ
+        try:
+            original_image = pg.image.load(self.item_images[type])
+            # 画像のサイズを30x30にリサイズ
+            self.image = pg.transform.scale(original_image, (30, 30))
+        except FileNotFoundError:
+            # 画像がない場合は従来の四角形を使用
+            self.image = pg.Surface((30, 30))
+            colors = {
+                "gravity": (255, 0, 0),      # 赤
+                "shield": (0, 0, 255),       # 青
+                "emp": (255, 165, 0),        # オレンジ
+                "hyper": (0, 255, 0),        # 緑
+                "guided": (0, 255, 255)      # 水色
+            }
+            pg.draw.rect(self.image, colors[type], (5, 5, 20, 20))
+            
         self.image.set_colorkey((0, 0, 0))
         self.rect = self.image.get_rect()
         self.rect.center = WIDTH + 15, y
-        self.vx = -5  # 左方向への速度
+        self.vx = -5
 
     def update(self):
         """
-        アイテムを落下させる
+        アイテムを左に移動させる
         """
         self.rect.centerx += self.vx
         if self.rect.right < 0:  # 左端から出たら消える
@@ -448,13 +462,12 @@ class ItemStock:
     """
     def __init__(self):
         self.items = {
-            "gravity": 0,  # 重力場の所持数
-            "shield": 0,   # 防御壁の所持数
-            "emp": 0,      # EMPの所持数
-            "hyper": 0,     # 無敵モードの所持数
-            "guided": 0    # 誘導ビームの所持数
+            "gravity": 0,
+            "shield": 0,
+            "emp": 0,
+            "hyper": 0,
+            "guided": 0
         }
-        # フォントの設定
         self.font = pg.font.Font(None, 30)
         
     def add_item(self, item_type: str):
@@ -477,29 +490,36 @@ class ItemStock:
         """
         アイテムの所持数を画面に表示
         """
-        colors = {
-            "gravity": (255, 0, 0),      # 赤
-            "shield": (0, 0, 255),       # 青
-            "emp": (255, 165, 0),        # オレンジ
-            "hyper": (0, 255, 0),         # 緑
-            "guided": (255, 0, 255)      # 紫（誘導ビーム用）
-        }
         keys = {
             "gravity": "Enter",
             "shield": "S",
             "emp": "E",
             "hyper": "RShift",
-            "guided": "LShift"  # 左シフトキーで誘導ビーム
+            "guided": "LShift"
         }
+        
         for i, (item_type, count) in enumerate(self.items.items()):
-            # アイテムアイコンの表示
-            icon = pg.Surface((20, 20))
-            pg.draw.rect(icon, colors[item_type], (5, 5, 20, 20))
+            try:
+                # 対応する色の卵画像を読み込んでアイコンとして使用
+                original_image = pg.image.load(Item.item_images[item_type])
+                icon = pg.transform.scale(original_image, (20, 20))
+            except FileNotFoundError:
+                # 画像がない場合は従来の四角形を使用
+                icon = pg.Surface((20, 20))
+                colors = {
+                    "gravity": (255, 0, 0),
+                    "shield": (0, 0, 255),
+                    "emp": (255, 165, 0),
+                    "hyper": (0, 255, 0),
+                    "guided": (0, 255, 255)
+                }
+                pg.draw.rect(icon, colors[item_type], (0, 0, 20, 20))
+            
             icon.set_colorkey((0, 0, 0))
             screen.blit(icon, (10, 10 + i * 30))
             
             # 所持数の表示
-            text = self.font.render(f"x{count} ({keys[item_type]}", True, (255, 255, 255))
+            text = self.font.render(f"x{count} ({keys[item_type]})", True, (255, 255, 255))
             screen.blit(text, (35, 10 + i * 30))
 
 def main():
