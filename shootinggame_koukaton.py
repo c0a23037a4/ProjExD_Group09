@@ -353,8 +353,8 @@ def create_obstacle_wall():
     """
     wall = pg.sprite.Group()
     gap_start = random.randint(0, HEIGHT - 150)  # ランダムに隙間の開始位置を決定
-    for i in range(0, HEIGHT, 50):  # 50ピクセル間隔で縦に連ねる
-        if not (gap_start <= i < gap_start + 150):  # 5つ分の隙間を作成
+    for i in range(25, HEIGHT, 50):  # 50ピクセル間隔で縦に連ねる
+        if not (gap_start <= i < gap_start + 150):  # 3つ分の隙間を作成
             obstacle = Obstacle()
             obstacle.rect.centery = i
             wall.add(obstacle)
