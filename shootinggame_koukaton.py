@@ -11,6 +11,35 @@ HEIGHT = 650  # ゲームウィンドウの高さ
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 
+def gameover(screen: pg.Surface) -> None:
+    """
+    ゲームオーバー画面を表示する関数。
+    引数:screen 
+    ゲームのメイン画面のSurface
+    """
+    # 黒い半透明の背景を作成
+    blackout = pg.Surface((WIDTH, HEIGHT))  
+    blackout.fill((0, 0, 0)) 
+    blackout.set_alpha(128)  # 半透明（128）を設定する
+
+    font = pg.font.Font(None, 80)  # フォントを設定
+    text = font.render("Game Over", True, (255, 255, 255))  # Game Overの表示
+    text_rect = text.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 50))  # 画面中央に表示
+
+    # こうかとんの画像を読み込む
+    kk_cry_img = pg.image.load("fig/100.png")  # 悲しみこうかとん
+    kk_cry_img = pg.transform.rotozoom(kk_cry_img, 0, 0.3)
+    kk_left_rect = kk_cry_img.get_rect(center=(WIDTH // 2 , HEIGHT // 2 + 50))
+
+    # 画面に描画
+    screen.blit(blackout, (0, 0))  # 半透明の黒背景を描画
+    screen.blit(text, text_rect)  # Game Overの文字を表示
+    screen.blit(kk_cry_img, kk_left_rect)  # 丸焼きの画像
+
+    pg.display.update()
+    time.sleep(5)  # 5秒間表示
+
+
 class Gravity(pg.sprite.Sprite):
     """
     重力場に関するクラス
@@ -73,30 +102,20 @@ class Bird(pg.sprite.Sprite):
         super().__init__()
         img0 = pg.transform.rotozoom(pg.image.load(f"fig/{num}.png"), 0, 0.9)
         img = pg.transform.flip(img0, True, False)  # デフォルトのこうかとん
-        # self.imgs = {
-        #     (+1, 0): img,  # 右
-        #     (+1, -1): pg.transform.rotozoom(img, 45, 0.9),  # 右上
-        #     (0, -1): pg.transform.rotozoom(img, 90, 0.9),  # 上
-        #     (-1, -1): pg.transform.rotozoom(img0, -45, 0.9),  # 左上
-        #     (+1, -1): pg.transform.rotozoom(img, 45, 0.9),  # 右上
-        #     (0, -1): pg.transform.rotozoom(img, 90, 0.9),  # 上
-        #     (-1, -1): pg.transform.rotozoom(img0, -45, 0.9),  # 左上
-        #     (-1, 0): img0,  # 左
-        #     (-1, +1): pg.transform.rotozoom(img0, 45, 0.9),  # 左下
-        #     (0, +1): pg.transform.rotozoom(img, -90, 0.9),  # 下
-        #     (+1, +1): pg.transform.rotozoom(img, -45, 0.9),  # 右下
-        #     (-1, +1): pg.transform.rotozoom(img0, 45, 0.9),  # 左下
-        #     (0, +1): pg.transform.rotozoom(img, -90, 0.9),  # 下
-        #     (+1, +1): pg.transform.rotozoom(img, -45, 0.9),  # 右下
-        # }
-        # self.dire = (+1, 0)
-        # self.image = self.imgs[self.dire]
         self.image = img
         self.rect = self.image.get_rect()
         self.rect.center = xy
         self.speed = 10
         self.state = "normal"
         self.hyper_life = 500
+        self.hp = Health()
+
+    def take_damage(self, damage):
+        """
+        攻撃を受けた時の処理
+        """
+        if self.state != "hyper":
+            self.hp.take_damage(damage)
 
     def change_img(self, num: int, screen: pg.Surface):
         """
@@ -105,6 +124,8 @@ class Bird(pg.sprite.Sprite):
         引数2 screen：画面Surface
         """
         self.image = pg.transform.rotozoom(pg.image.load(f"fig/3.png"), 0, 0.9)
+        screen.blit(self.image, self.rect)
+        self.image = pg.transform.rotozoom(pg.image.load(f"fig/8.png"), 0, 1.7) #  HPが0になった時の画像
         screen.blit(self.image, self.rect)
 
     def update(self, key_lst: list[bool], screen: pg.Surface):
@@ -379,6 +400,30 @@ class EMP(pg.sprite.Sprite):
         if self.life < 0:
             self.kill()
 
+class Health:
+    """
+    こうかとんのHPを管理するクラス
+    """
+    def __init__(self, max_hp=100):
+        self.max_hp = max_hp
+        self.current_hp = max_hp
+        self.font = pg.font.Font(None, 50)
+        self.color = (255, 0, 0)  # 赤色でHPを表示
+
+    def take_damage(self, damage):
+        """
+        ダメージを受けた際にHPを減少させる
+        """
+        self.current_hp -= damage
+        self.current_hp = max(self.current_hp, 0)  # HP制限
+
+    def update(self, screen: pg.Surface):
+        """
+        画面に現在のHPを表示
+        """
+        hp_text = self.font.render(f"HP: {self.current_hp}/{self.max_hp}", True, self.color)
+        screen.blit(hp_text, (WIDTH - 200, HEIGHT - 110))
+
 class Clear_item(pg.sprite.Sprite):
     """
     ゲームクリアに必要な特別なアイテムに関するクラス
@@ -424,7 +469,7 @@ class Jewel_num(pg.sprite.Sprite):
         self.cpointmax = Clear_item().cpointmax
         self.image = self.font.render(f"jewel:{self.cpoint}/{self.cpointmax}", 0, self.color)
         self.rect = self.image.get_rect()
-        self.rect.center = WIDTH-100, HEIGHT-50
+        self.rect.center = WIDTH-100, HEIGHT-150
 
     def update(self, screen: pg.Surface, cpoint: int):
         self.cpoint = cpoint
@@ -508,7 +553,7 @@ def main():
 
         for bomb in pg.sprite.groupcollide(bombs, shields, True, False).keys():
             exps.add(Explosion(bomb, 50))  # 爆発エフェクト
-        score.value += 1  # 1点アップ
+            score.value += 1  # 1点アップ
 
         # 重力場と爆弾、敵機の衝突判定
         for gravity in gravity_group:
@@ -525,12 +570,16 @@ def main():
                 score.value += 1  # 1点アップ
                 continue
             else:
-                bird.change_img(8, screen) # こうかとん悲しみエフェクト
-                score.update(screen)
-                pg.display.update()
-                time.sleep(2)
-                return
+                bird.take_damage(10)
+                if bird.hp.current_hp <= 0:
+                    bird.change_img(8, screen) # こうかとん悲しみエフェクト
+                    score.update(screen)
+                    gameover(screen)
+                    pg.display.update()
+                    time.sleep(2)
+                    return
 
+        bird.hp.update(screen)
         for item in citem: # jewelとの衝突判定
             if bird.rect.colliderect(item.rct):
                 cpoint += 1
@@ -543,7 +592,7 @@ def main():
                     exps.add(get_efect(item, 50))
                     citem.remove(item)
                     score.value += 20
-        if cpoint == cpointmax:
+        if cpoint >= cpointmax:
             fonto = pg.font.Font(None, 80)
             txt = fonto.render("Game Clear", True, (0, 255, 0))
             screen.blit(txt, [WIDTH//2-150, HEIGHT//2])
