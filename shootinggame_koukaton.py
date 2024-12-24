@@ -227,6 +227,32 @@ class Explosion(pg.sprite.Sprite):
         if self.life < 0:
             self.kill()
 
+class get_efect(pg.sprite.Sprite):
+    """
+    キラキラエフェクトに関するクラス
+    """
+    def __init__(self, obj, life: int):
+        """
+        キラキラエフェクトを生成する
+        引数1 obj：itemインスタンス
+        引数2 life：エフェクト発生時間
+        """
+        super().__init__()
+        img = pg.image.load(f"fig/kirakira.png")
+        self.imgs = [img, pg.transform.flip(img, 1, 1)]
+        self.image = self.imgs[0]
+        self.rect = self.image.get_rect(center=obj.rct.center)
+        self.life = life
+
+    def update(self):
+        """
+        エフェクト時間を1減算したエフェクト経過時間_lifeに応じてエフェクト画像を切り替えることで
+        エフェクトを表現する
+        """
+        self.life -= 1
+        self.image = self.imgs[self.life//10%2]
+        if self.life < 0:
+            self.kill()
 
 class Enemy(pg.sprite.Sprite):
     """
@@ -353,6 +379,57 @@ class EMP(pg.sprite.Sprite):
         if self.life < 0:
             self.kill()
 
+class Clear_item(pg.sprite.Sprite):
+    """
+    ゲームクリアに必要な特別なアイテムに関するクラス
+    右側から流れてくるjewelを4つすべて取得するとゲームクリアになる
+    """
+
+    def __init__(self):
+        """
+        引数に基づきアイテム画像Surfaceを生成する
+        引数 xy：アイテム画像の中心座標タプル
+        """
+        super().__init__()
+        self.cpoint = 0
+        self.cpointmax = 4
+        self.ci_imgs = [pg.image.load(f"fig/jewel0{i}.png") for i in range(1, 4)]
+        self.image = random.choice(self.ci_imgs)
+        self.image = pg.transform.rotozoom(self.image, 0, 0.4)
+        self.rct = self.image.get_rect()
+        self.rct.center = WIDTH, random.randint(0, HEIGHT)
+        self.vx, self.vy = -5, 0
+
+    def update(self, screen: pg.Surface):
+        """
+        アイテムを速度ベクトルself.vx, self.vyに基づき移動させる
+        引数 screen：画面Surface
+        """
+       
+        self.rct.move_ip(self.vx, self.vy)
+        screen.blit(self.image, self.rct)
+
+class Jewel_num(pg.sprite.Sprite):
+    """
+    獲得したjewelの数を表示するクラス
+    """
+    def __init__(self):
+        """
+        引数に基づきjewel数表示画像Surfaceを生成する
+        引数 xy：jewel数表示画像の中心座標タプル
+        """
+        self.font = pg.font.Font(None, 50)
+        self.color = (0, 0, 255)
+        self.cpoint = Clear_item().cpoint
+        self.cpointmax = Clear_item().cpointmax
+        self.image = self.font.render(f"jewel:{self.cpoint}/{self.cpointmax}", 0, self.color)
+        self.rect = self.image.get_rect()
+        self.rect.center = WIDTH-100, HEIGHT-50
+
+    def update(self, screen: pg.Surface, cpoint: int):
+        self.cpoint = cpoint
+        self.image = self.font.render(f"jewel:{self.cpoint}/{self.cpointmax}", 0, self.color)
+        screen.blit(self.image, self.rect)
 
 def main():
     pg.display.set_caption("真！こうかとん無双")
@@ -360,6 +437,9 @@ def main():
     bg_img = pg.image.load(f"fig/pg_bg.jpg")
     flip_bg_img = pg.transform.flip(bg_img, True, False)
     score = Score()
+    cpoint = Clear_item().cpoint
+    cpointmax = Clear_item().cpointmax
+    jewel_num = Jewel_num()
 
     bird = Bird(3, (900, 400))
     bombs = pg.sprite.Group()
@@ -368,11 +448,13 @@ def main():
     emys = pg.sprite.Group()
     shields = pg.sprite.Group()  # 防御壁グループを追加
     emps = pg.sprite.Group()  # EMPのグループ
+    citem = pg.sprite.Group()
 
     tmr = 0
     emps.update()# EMPの更新と描画を追加
     emps.draw(screen)
-      
+
+
     clock = pg.time.Clock()
     gravity_group = pg.sprite.Group()  # Gravityインスタンスを管理するグループ
 
@@ -404,6 +486,9 @@ def main():
         screen.blit(flip_bg_img, [-X*3+1600, 0])
         screen.blit(bg_img, [-X*3+3200, 0])
         screen.blit(flip_bg_img, [-X*3+4800, 0])
+        rand_num = random.randint(1, 5)
+        if rand_num==1 and tmr%200 == 0:
+            citem.add(Clear_item())
 
         if tmr%200 == 0:  # 200フレームに1回，敵機を出現させる
             emys.add(Enemy())
@@ -446,6 +531,25 @@ def main():
                 time.sleep(2)
                 return
 
+        for item in citem: # jewelとの衝突判定
+            if bird.rect.colliderect(item.rct):
+                cpoint += 1
+                exps.add(get_efect(item, 50))
+                score.value += 20
+                citem.remove(item)
+            for beam in beams:
+                if beam.rect.colliderect(item.rct):
+                    cpoint += 1
+                    exps.add(get_efect(item, 50))
+                    citem.remove(item)
+                    score.value += 20
+        if cpoint == cpointmax:
+            fonto = pg.font.Font(None, 80)
+            txt = fonto.render("Game Clear", True, (0, 255, 0))
+            screen.blit(txt, [WIDTH//2-150, HEIGHT//2])
+            pg.display.update()
+            time.sleep(1)
+            return
         gravity_group.update()
         gravity_group.draw(screen)
         bird.update(key_lst, screen)
@@ -460,6 +564,8 @@ def main():
         shields.update()
         shields.draw(screen)
         score.update(screen)
+        citem.update(screen)
+        jewel_num.update(screen, cpoint)
         pg.display.update()
         tmr += 1
         clock.tick(50)
