@@ -14,34 +14,30 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 def gameover(screen: pg.Surface) -> None:
     """
     ゲームオーバー画面を表示する関数。
-    引数:
-        screen: ゲームのメイン画面Surface
+    引数:screen 
+    ゲームのメイン画面のSurface
     """
     # 黒い半透明の背景を作成
-    blackout = pg.Surface((WIDTH, HEIGHT))  # 画面サイズに合わせたSurfaceを作成
-    blackout.fill((0, 0, 0))  # 黒で塗りつぶす
-    blackout.set_alpha(128)  # 半透明（128）を設定
+    blackout = pg.Surface((WIDTH, HEIGHT))  
+    blackout.fill((0, 0, 0)) 
+    blackout.set_alpha(128)  # 半透明（128）を設定する
 
-    # メッセージを作成
     font = pg.font.Font(None, 80)  # フォントを設定
-    text = font.render("Game Over", True, (255, 255, 255))  # 白い文字で「Game Over」
-    text_rect = text.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 50))  # 画面中央に配置
+    text = font.render("Game Over", True, (255, 255, 255))  # Game Overの表示
+    text_rect = text.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 50))  # 画面中央に表示
 
     # こうかとんの画像を読み込む
-    kk_cry_img = pg.image.load("fig/100.png")  # 悲しいこうかとんの画像を使用
-    kk_cry_img = pg.transform.rotozoom(kk_cry_img, 0, 0.3)  # サイズ調整
+    kk_cry_img = pg.image.load("fig/100.png")  # 悲しみこうかとん
+    kk_cry_img = pg.transform.rotozoom(kk_cry_img, 0, 0.3)
     kk_left_rect = kk_cry_img.get_rect(center=(WIDTH // 2 , HEIGHT // 2 + 50))
-    #kk_right_rect = kk_cry_img.get_rect(center=(WIDTH // 2 + 150, HEIGHT // 2 + 50))
 
     # 画面に描画
     screen.blit(blackout, (0, 0))  # 半透明の黒背景を描画
-    screen.blit(text, text_rect)  # 「Game Over」の文字を描画
-    screen.blit(kk_cry_img, kk_left_rect)  # 左側のこうかとん画像を描画
-    #screen.blit(kk_cry_img, kk_right_rect)  # 右側のこうかとん画像を描画
+    screen.blit(text, text_rect)  # Game Overの文字を表示
+    screen.blit(kk_cry_img, kk_left_rect)  # 丸焼きの画像
 
-    # 画面更新と待機
     pg.display.update()
-    pg.time.wait(5000)  # 5秒間表示
+    time.sleep(5)  # 5秒間表示
 
 
 class Gravity(pg.sprite.Sprite):
@@ -106,24 +102,6 @@ class Bird(pg.sprite.Sprite):
         super().__init__()
         img0 = pg.transform.rotozoom(pg.image.load(f"fig/{num}.png"), 0, 0.9)
         img = pg.transform.flip(img0, True, False)  # デフォルトのこうかとん
-        # self.imgs = {
-        #     (+1, 0): img,  # 右
-        #     (+1, -1): pg.transform.rotozoom(img, 45, 0.9),  # 右上
-        #     (0, -1): pg.transform.rotozoom(img, 90, 0.9),  # 上
-        #     (-1, -1): pg.transform.rotozoom(img0, -45, 0.9),  # 左上
-        #     (+1, -1): pg.transform.rotozoom(img, 45, 0.9),  # 右上
-        #     (0, -1): pg.transform.rotozoom(img, 90, 0.9),  # 上
-        #     (-1, -1): pg.transform.rotozoom(img0, -45, 0.9),  # 左上
-        #     (-1, 0): img0,  # 左
-        #     (-1, +1): pg.transform.rotozoom(img0, 45, 0.9),  # 左下
-        #     (0, +1): pg.transform.rotozoom(img, -90, 0.9),  # 下
-        #     (+1, +1): pg.transform.rotozoom(img, -45, 0.9),  # 右下
-        #     (-1, +1): pg.transform.rotozoom(img0, 45, 0.9),  # 左下
-        #     (0, +1): pg.transform.rotozoom(img, -90, 0.9),  # 下
-        #     (+1, +1): pg.transform.rotozoom(img, -45, 0.9),  # 右下
-        # }
-        # self.dire = (+1, 0)
-        # self.image = self.imgs[self.dire]
         self.image = img
         self.rect = self.image.get_rect()
         self.rect.center = xy
