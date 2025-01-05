@@ -134,7 +134,7 @@ class Bird(pg.sprite.Sprite):
         self.image = img
         self.rect = self.image.get_rect()
         self.rect.center = xy
-        self.speed = 10
+        self.speed = 5
         self.state = "normal"
         self.hyper_life = 500
         self.hp = Health()
@@ -152,8 +152,6 @@ class Bird(pg.sprite.Sprite):
         引数1 num：こうかとん画像ファイル名の番号
         引数2 screen：画面Surface
         """
-        self.image = pg.transform.rotozoom(pg.image.load(f"fig/3.png"), 0, 0.9)
-        screen.blit(self.image, self.rect)
         self.image = pg.transform.rotozoom(pg.image.load(f"fig/8.png"), 0, 1.7) #  HPが0になった時の画像
         screen.blit(self.image, self.rect)
 
@@ -161,7 +159,7 @@ class Bird(pg.sprite.Sprite):
         sum_mv = [0, 0]
         for k, mv in {
             pg.K_UP: (0, -1),
-            pg.K_DOWN: (0, +1),
+            pg.K_DOWN: (0 , +1),
             pg.K_LEFT: (-1, 0),
             pg.K_RIGHT: (+1, 0),
         }.items():
@@ -175,7 +173,16 @@ class Bird(pg.sprite.Sprite):
             self.dire = tuple(sum_mv)
         if self.state == "hyper":
             self.image = pg.transform.laplacian(self.image)
+        else:
+            img0 = pg.transform.rotozoom(pg.image.load(f"fig/3.png"), 0, 0.9)
+            img = pg.transform.flip(img0, True, False)  # デフォルトのこうかとん
+            self.image = img
         screen.blit(self.image, self.rect)
+
+        if self.state == "hyper":
+            self.hyper_life -= 1
+            if self.hyper_life < 0:
+                self.state = "normal"
 
 class Bomb(pg.sprite.Sprite):
     """
@@ -706,12 +713,11 @@ def main():
     cpointmax = Clear_item().cpointmax
     jewel_num = Jewel_num()
 
-    bird = Bird(3, (900, 400))
+    bird = Bird(3, (100, HEIGHT//2))
     charge_bar = ChargeBar()  # チャージバーのインスタンス
     beams = pg.sprite.Group()
     clock = pg.time.Clock()
     exps = pg.sprite.Group()
-    tmr = 0
     charging = False
 
     bombs = pg.sprite.Group()
@@ -762,10 +768,10 @@ def main():
             if event.type == pg.KEYUP and event.key == pg.K_SPACE:
                 charging = False
                 max_charged = charge_bar.charge_time == charge_bar.max_charge #チャージ時間が足りるならBEEM1を発射する
-                if item_stock.use_item("guided"):
-                    beams.add(GuidedBeam(bird, emys))
-                else:
-                    beams.add(Beam(bird, max_charged))
+                # if item_stock.use_item("guided"):
+                #     beams.add(GuidedBeam(bird, emys))
+                # else:
+                beams.add(Beam(bird, max_charged))
                 
         # for event in pg.event.get():
         #     if event.type == pg.QUIT:
@@ -798,15 +804,18 @@ def main():
         screen.blit(flip_bg_img, [-X*3+1600, 0])
         screen.blit(bg_img, [-X*3+3200, 0])
         screen.blit(flip_bg_img, [-X*3+4800, 0])
+        screen.blit(bg_img, [-X*3+6400, 0])
+        screen.blit(flip_bg_img, [-X*3+8000, 0])
+        screen.blit(bg_img, [-X*3+9600, 0])
+        screen.blit(flip_bg_img, [-X*3+11200, 0])
+        screen.blit(bg_img, [-X*3+12800, 0])
+        screen.blit(flip_bg_img, [-X*3+14400, 0])
+        screen.blit(bg_img, [-X*3+16000, 0])
+        screen.blit(flip_bg_img, [-X*3+17600, 0])
+        
         rand_num = random.randint(1, 5)
         if rand_num==1 and tmr%200 == 0:
             citem.add(Clear_item())
-
-        # ランダムなタイミングでアイテムを出現させる
-        if tmr % 300 == 0:  # 300フレームごとに
-            item_type = random.choice(["gravity", "shield", "emp", "hyper", "guided"])
-            y = random.randint(0, HEIGHT)  # y座標をランダムに設定
-            items.add(Item(WIDTH + 15, y, item_type))
 
         # ランダムなタイミングでアイテムを出現させる
         if tmr % 300 == 0:  # 300フレームごとに
@@ -896,7 +905,9 @@ def main():
                 continue
             else:
                 bird.change_img(8, screen) # こうかとん悲しみエフェクト
+                #こうかとん画像を消す
                 score.update(screen)
+                gameover(screen)
                 pg.display.update()
                 time.sleep(2)
                 return
